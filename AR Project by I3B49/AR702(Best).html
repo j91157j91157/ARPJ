@@ -1,0 +1,708 @@
+
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='../three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="../three.js/examples/vendor/three.js/examples/js/libs/stats.min.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://rawgit.com/jyunming-chen/tutsplus/master/js/text2D.js"></script>
+<!-- ar.js -->
+<script src="../three.js/build/ar.js"></script>
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	NDC X:<input id='X' type='text'>, NDC Y:<input id='Y' type='text'>
+</div>
+
+<script>
+
+// global variables
+var renderer, scene, camera;
+var sceneHUD, cameraHUD;
+var stats;
+var markerRoot;
+var markerHiro;
+var arToolKitSource, arToolKitContext;
+var raycaster, pickables;
+var square, square2, text, text2;
+var target, rotating = 0;
+var alpha = 0, alphaP1 = 0, alphaP2 = 0;
+var pos1, pos2, pos3, pos4;
+var pos1_s, pos2_s, alpha_s = 0;
+var toggle_j = false, toggle_s = false;
+var line_j, line_s;
+
+init();
+animate();
+
+function init() {
+	// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	//let _iOSDevice = !!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform);
+	let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+	console.log ('iOS: ' + _iOSDevice)
+
+	// init renderer
+	renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+
+	raycaster = new THREE.Raycaster();
+	pickables = [];
+	// init scene and camera
+	scene	= new THREE.Scene();
+	camera = new THREE.Camera();
+	scene.add(camera);
+
+	sceneHUD = new THREE.Scene();
+	cameraHUD = new THREE.OrthographicCamera (-10,10,10,-10, -10,10);
+
+	square = new THREE.Mesh (new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({color:0x00ffff, transparent:true, opacity:0.8}));
+	//一個 square會依照設備裝置的長寬比訂出一個相同比例的 rectangle
+	square2 = new THREE.Mesh (new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({color:0xffff00, transparent:true, opacity:0.8}));
+
+	square.position.set (-8, -5.5, 0);
+	square2.position.set (-8, -3.5, 0);
+
+	sceneHUD.add (square);
+	sceneHUD.add (square2);
+
+	pickables.push (square);
+	pickables.push (square2);
+	////////
+	var Text2D = THREE_Text.MeshText2D;
+  var textAlign = THREE_Text.textAlign;
+
+  text = new Text2D("Sunny", {
+    align: textAlign.left,
+    font: '30px Arial',
+    fillStyle: '#00ffff',
+    antialias: false
+  });
+  text.position.set(-6.4, -5.5, 0);
+  text.scale.set(.02, .02, .02);
+  sceneHUD.add(text);
+
+	text2 = new Text2D("Jmchen", {
+    align: textAlign.left,
+    font: '30px Arial',
+    fillStyle: '#ffff00',
+    antialias: false
+  });
+  text2.position.set(-6.4, -3.5, 0);
+  text2.scale.set(.02, .02, .02);
+  sceneHUD.add(text2);
+
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()
+		arToolkitSource.copySizeTo(renderer.domElement)
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+		}
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + 'data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	markerRoot = new THREE.Group()
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + 'data/data/patt.hiro'
+	})
+
+	//light
+	var ambientLight = new THREE.AmbientLight( 0x888888 );
+	markerRoot.add( ambientLight );
+
+	var light = new THREE.PointLight( 0xffffff, 1, 100 );
+	light.position.set( 25, 25, -50 );
+	markerRoot.add( light );
+
+
+	var classroom = build702();
+	classroom.rotation.x = -Math.PI/2;
+	//classroom.scale.set(0.15, 0.15, 0.15);
+	markerRoot.add (unitize (classroom, 1.5));
+	//markerRoot.add (classroom);
+
+	var gridXZ = new THREE.GridHelper(100, 10, 'red', 'white');
+  //markerRoot.add(gridXZ);
+
+	//Marker hidden
+	var marker_hidden = markerHide();
+	markerRoot.add (marker_hidden);
+	//FPS
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+
+	//iOS touch介面?
+	if (_iOSDevice)
+		window.addEventListener('touchstart', onTouchStart, false)
+	else
+		window.addEventListener ('mousedown', onMouseDown, false);
+}
+
+
+function animate() {
+	requestAnimationFrame (animate);
+
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+
+	///////////////////////////////////////////
+	if (alpha > 3) {
+  	alpha = 0;
+    alphaP1 = 0;
+    alphaP2 = 0;
+  }
+
+  alpha += 0.01;
+
+	var pp = pos1.clone();
+
+  if(alpha < 1) pp.lerp(pos2, alpha);
+  else if(alpha >= 1 && alpha < 2){
+    alphaP1 += 0.01;
+    pp = pos2.clone();
+    pp.lerp(pos3, alphaP1);
+  }
+  else if(alpha >= 2 && alpha < 3){
+  	alphaP2 += 0.01;
+  	pp = pos3.clone();
+    pp.lerp(pos4, alphaP2);
+  }
+  //////////////////////////////
+  alpha_s += 0.01;
+  if (alpha_s > 1) alpha_s = 0;
+
+  var ppp = pos1_s.clone();
+  ppp.lerp(pos2_s, alpha_s);
+
+  if(toggle_j) target.position.copy(pp);
+  if(toggle_s) target.position.copy(ppp);
+	line_j.visible = toggle_j;
+	line_s.visible = toggle_s;
+
+  rotating += 0.1;
+  target.rotation.y = rotating;
+
+	renderer.clear();
+	renderer.render (scene, camera);
+	renderer.render (sceneHUD, cameraHUD);
+
+	square.material.visible = markerRoot.visible;
+	square2.material.visible = markerRoot.visible;
+	text.material.visible = markerRoot.visible;
+	text2.material.visible = markerRoot.visible;
+
+
+	stats.update();
+}
+
+function onTouchStart (event) {
+	console.log ('in touch start')
+
+	if (event.touches.length == 1) {
+
+		event.preventDefault();
+		//cubeSpin = !cubeSpin;
+		let touchX = (event.touches[0].pageX / window.innerWidth) * 2 - 1;
+		let touchY = -(event.touches[0].pageY / window.innerHeight) * 2 + 1;
+		$("#X").val(touchX.toFixed(3));
+		$("#Y").val(touchY.toFixed(3));
+
+		if(touchX < -0.65 && touchX > -0.946 && touchY < -0.36 && touchY > -0.56){
+			console.log ('Yellow');
+			alpha = 0;
+		  alphaP1 = 0;
+		  alphaP2 = 0;
+			target.visible = true;
+			toggle_j = !toggle_j;
+		  if(toggle_s) toggle_s = false;
+		}
+		else if (touchX < -0.65 && touchX > -0.946 && touchY < -0.63 && touchY > -0.83){
+			console.log ('Blue');
+			alpha_s = 0;
+			target.visible = true;
+			toggle_s = !toggle_s;
+		  if(toggle_j) toggle_j = false;
+		}
+		else {
+			console.log ('no hit');
+		}
+	}
+	/*else if (event.touches.length == 2) {
+		event.preventDefault();
+		classroom.visible = !classroom.visible;
+	}*/
+}
+
+function onMouseDown (event) {
+		event.preventDefault();
+  	let mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+  	let mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+		$("#X").val(mouseX.toFixed(3));
+		$("#Y").val(mouseY.toFixed(3));
+
+		// use 2D algorithm
+		//position(0, 0, 0)  mouse.x < 0.2 && mouse.x > -0.2 && mouse.y < 0.3 && mouse.y > -0.3
+		if(mouseX < -0.65 && mouseX > -0.95 && mouseY < -0.41 && mouseY > -0.635){
+			console.log ('Yellow');
+			alpha = 0;
+		  alphaP1 = 0;
+		  alphaP2 = 0;
+			target.visible = true;
+			toggle_j = !toggle_j;
+		  if(toggle_s) toggle_s = false;
+		}
+		else if (mouseX < -0.65 && mouseX > -0.95 && mouseY < -0.71 && mouseY > -0.93){
+			console.log ('Blue');
+			alpha_s = 0;
+			target.visible = true;
+			toggle_s = !toggle_s;
+		  if(toggle_j) toggle_j = false;
+  	}
+		else {
+			console.log ('no hit');
+		}
+}
+
+function unitize (object, targetSize) {
+		// find bounding box of 'object'
+		var box3 = new THREE.Box3();
+		box3.setFromObject (object);
+		var size = new THREE.Vector3();
+		size.subVectors (box3.max, box3.min);
+		var center = new THREE.Vector3();
+		center.addVectors(box3.max, box3.min).multiplyScalar (0.5);
+		console.log ('center: ' + center.x + ', '+center.y + ', '+center.z );
+		console.log ('size: ' + size.x + ', ' +  size.y + ', '+size.z );
+		// uniform scaling according to objSize
+		var objSize = Math.max (size.x, size.y, size.z);
+		var scaleSet = targetSize/objSize;
+		var theObject =  new THREE.Object3D();
+		theObject.add (object);
+		object.scale.set (scaleSet, scaleSet, scaleSet);
+		object.position.y = size.y/2*scaleSet;
+		//object.position.set (-center.x*scaleSet, -center.y*scaleSet + size.y/2*scaleSet, -center.z*scaleSet);
+		return theObject;
+}
+
+function build702 () {
+	var AR702 = new THREE.Object3D();
+	var doorMat = new THREE.MeshLambertMaterial({
+			color: 0xffffff,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var compartmentMat = new THREE.MeshLambertMaterial({
+			color: 0x41f4b2,
+      //color: 0x84aa53,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+	var deskMat = new THREE.MeshLambertMaterial({
+			color: 0x91ecfc,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var desk1Mat = new THREE.MeshLambertMaterial({
+			color: 0x73c0f4,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var desk2Mat = new THREE.MeshLambertMaterial({
+			color: 0xedf983,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var desk3Mat = new THREE.MeshLambertMaterial({
+			color: 0xffbb0f,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var desk4Mat = new THREE.MeshLambertMaterial({
+			color: 0xffe8ba,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var desk5Mat = new THREE.MeshLambertMaterial({
+			color: 0xba6607,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var cabinetMat = new THREE.MeshLambertMaterial({
+			color: 0xfcae6a,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+  var iron_cabinetMat = new THREE.MeshLambertMaterial({
+			color: 0xb5aeaa,
+     	transparent : true,
+			opacity: 0.8,
+			side: THREE.DoubleSide
+		});
+
+  var loader = new THREE.TextureLoader();
+  loader.setCrossOrigin ('');
+  var floorTexture = loader.load('https://i.imgur.com/A9JmjsE.png');
+  floorTexture.wrapS = THREE.RepeatWrapping;
+  floorTexture.wrapT = THREE.RepeatWrapping;
+  floorTexture.repeat.set(2, 2);
+  var floorMat = new THREE.MeshLambertMaterial({
+    map: floorTexture,
+    side: THREE.DoubleSide
+  });
+
+  var floor = new THREE.Mesh(new THREE.BoxGeometry(8.537, 0.05, 7.717), floorMat);
+ 	var compartment1 = new THREE.Mesh(new THREE.BoxGeometry(3.335, 2.01, 0.06), compartmentMat);
+  var compartment2 = new THREE.Mesh(new THREE.BoxGeometry(3.352, 2.01, 0.06), compartmentMat);
+  var compartment3 = new THREE.Mesh(new THREE.BoxGeometry(3.86, 2.01, 0.06), compartmentMat);
+  var compartment4 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.01, 0.06), doorMat);
+  var door_jmchen = new THREE.Mesh(new THREE.BoxGeometry(0.925, 2.01, 0.06), doorMat);
+  var door_sunny = door_jmchen.clone();
+  var doorknob_jmchen = new THREE.Mesh(new THREE.SphereGeometry( 0.05, 16, 16 ), doorMat);
+  var doorknob_sunny = doorknob_jmchen.clone();
+  var cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.985, 1.884), cabinetMat);
+
+  /////////////// Desk ///////////////
+  var desk = new THREE.Object3D();
+  var desktop = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.05, 1.774), deskMat);
+  var deskLeg_L = new THREE.Mesh(new THREE.BoxGeometry(0.738, 0.852, 0.05), deskMat);
+  var deskLeg_R = deskLeg_L.clone();
+  deskLeg_L.position.set(-0.091, -0.451, 0.862);
+  deskLeg_R.position.set(-0.091, -0.451, -0.862);
+
+  desk.add(desktop);
+  desk.add(deskLeg_L);
+  desk.add(deskLeg_R);
+  ////////////////////////////////////
+  /////////////// Desk 1 /////////////
+  var desk1 = new THREE.Object3D();
+  var desk1top = new THREE.Mesh(new THREE.BoxGeometry(0.854, 0.05, 1.633), desk1Mat);
+  var desk1Leg_1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.802, 0.05), desk1Mat);
+  var desk1Leg_2 = desk1Leg_1.clone();
+  var desk1Leg_3 = desk1Leg_1.clone();
+  var desk1Leg_4 = desk1Leg_1.clone();
+  var support_bar_1 = new THREE.Mesh(new THREE.BoxGeometry(0.702, 0.05, 0.05), desk1Mat);
+  var support_bar_2 = support_bar_1.clone();
+
+  desk1Leg_1.position.set(-0.38, -0.426, 0.65);
+  desk1Leg_2.position.set(-0.38, -0.426, -0.65);
+  desk1Leg_3.position.set(0.38, -0.426, -0.65);
+  desk1Leg_4.position.set(0.38, -0.426, 0.65);
+  support_bar_1.position.set(0, -0.7, 0.65);
+  support_bar_2.position.set(0, -0.7, -0.65);
+
+  desk1.add(desk1top);
+  desk1.add(desk1Leg_1);
+  desk1.add(desk1Leg_2);
+  desk1.add(desk1Leg_3);
+  desk1.add(desk1Leg_4);
+  desk1.add(support_bar_1);
+  desk1.add(support_bar_2);
+  ////////////////////////////////////
+  /////////////// Desk 2//////////////
+  var desk2 = new THREE.Object3D();
+  var desk2top = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.05, 1.108), desk2Mat);
+  var desk2Leg_L1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.682, 0.05), desk2Mat);
+  var desk2Leg_R1 = desk2Leg_L1.clone();
+  var desk2Leg_L2 = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.05, 0.05), desk2Mat);
+  var desk2Leg_R2 = desk2Leg_L2.clone();
+
+  desk2Leg_L1.position.set(-0.26, -0.366, 0.529);
+  desk2Leg_R1.position.set(-0.26, -0.366, -0.529);
+  desk2Leg_L2.position.set(-0.035, -0.732, 0.529);
+  desk2Leg_R2.position.set(-0.035, -0.732, -0.529);
+
+  desk2.add(desk2top);
+  desk2.add(desk2Leg_L1);
+  desk2.add(desk2Leg_R1);
+  desk2.add(desk2Leg_L2);
+  desk2.add(desk2Leg_R2);
+  ////////////////////////////////////
+  /////////////// Desk 3//////////////
+  var desk3 = new THREE.Object3D();
+  var desk3top = new THREE.Mesh(new THREE.BoxGeometry(0.551, 0.05, 0.801), desk3Mat);
+  var desk3drawer = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.242, 0.73), desk3Mat);
+  var desk3Leg_1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.574, 0.05), desk3Mat);
+  var desk3Leg_2 = desk3Leg_1.clone();
+  var desk3Leg_3 = desk3Leg_1.clone();
+  var desk3Leg_4 = desk3Leg_1.clone();
+
+  desk3drawer.position.y = -0.146;
+  desk3Leg_1.position.set(-0.215, -0.554, 0.34);
+  desk3Leg_2.position.set(-0.215, -0.554, -0.34);
+  desk3Leg_3.position.set(0.215, -0.554, -0.34);
+  desk3Leg_4.position.set(0.215, -0.554, 0.34);
+
+
+  desk3.add(desk3top);
+  desk3.add(desk3drawer);
+  desk3.add(desk3Leg_1);
+  desk3.add(desk3Leg_2);
+  desk3.add(desk3Leg_3);
+  desk3.add(desk3Leg_4);
+  ////////////////////////////////////
+  /////////////// Desk 4 /////////////
+  var desk4 = new THREE.Object3D();
+  var desk4top = new THREE.Mesh(new THREE.BoxGeometry(0.834, 0.05, 1.163), desk4Mat);
+  var desk4Leg_1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.798, 0.05), desk4Mat);
+  var desk4Leg_2 = desk4Leg_1.clone();
+  var support_bar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.05), desk4Mat);
+  var desk4drawer = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.798, 0.4), desk4Mat);
+  var desk4drawer1 = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.15, 0.4), desk4Mat);
+  var desk4drawer2 = desk4drawer1.clone();
+  var desk4drawer3 = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.352, 0.4), desk4Mat);
+
+  desk4Leg_1.position.set(-0.375, -0.424, 0.54);
+  desk4Leg_2.position.set(0.375, -0.424, 0.54);
+  support_bar.position.set(0, -0.7, 0.54);
+  desk4drawer.position.set(-0.015, -0.424, -0.365);
+  desk4drawer1.position.set(0.4, -0.146, -0.365);
+  desk4drawer2.position.set(0.4, -0.346, -0.365);
+  desk4drawer3.position.set(0.4, -0.647, -0.365);
+
+  desk4.add(desk4top);
+  desk4.add(desk4Leg_1);
+  desk4.add(desk4Leg_2);
+  desk4.add(support_bar);
+  desk4.add(desk4drawer);
+  desk4.add(desk4drawer1);
+  desk4.add(desk4drawer2);
+  desk4.add(desk4drawer3);
+  ////////////////////////////////////
+  /////////////// Desk 5 /////////////
+  var desk5 = new THREE.Object3D();
+  var desk5top = new THREE.Mesh(new THREE.BoxGeometry(0.904, 0.05, 1.304), desk5Mat);
+  var desk5box = new THREE.Mesh(new THREE.BoxGeometry(0.645, 0.584, 1.25), desk5Mat);
+  var desk5Leg_1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.05), desk5Mat);
+  var desk5Leg_2 = desk5Leg_1.clone();
+  var desk5Leg_3 = desk5Leg_1.clone();
+  var desk5Leg_4 = desk5Leg_1.clone();
+
+  desk5box.position.set(-0.1, -0.317, 0);
+  desk5Leg_1.position.set(-0.3975, -0.709, 0.6);
+  desk5Leg_2.position.set(-0.3975, -0.709, -0.6);
+  desk5Leg_3.position.set(0.1975, -0.709, -0.6);
+  desk5Leg_4.position.set(0.1975, -0.709, 0.6);
+
+  desk5.add(desk5top);
+  desk5.add(desk5box);
+  desk5.add(desk5Leg_1);
+  desk5.add(desk5Leg_2);
+  desk5.add(desk5Leg_3);
+  desk5.add(desk5Leg_4);
+  ////////////////////////////////////
+  /////////////// Desk 6 /////////////
+  var desk6 = desk.clone();
+  ////////////////////////////////////
+  //////////// Iron Cabinet //////////
+  var iron_cabinet = new THREE.Object3D();
+  var iron_cabinet_top = new THREE.Mesh(new THREE.BoxGeometry(0.857, 0.05, 0.528), iron_cabinetMat);
+  var iron_cabinet_box = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.704, 0.48), iron_cabinetMat);
+  var iron_cabinetLeg_1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.05), iron_cabinetMat);
+  var iron_cabinetLeg_2 = iron_cabinetLeg_1.clone();
+  var iron_cabinetLeg_3 = iron_cabinetLeg_1.clone();
+  var iron_cabinetLeg_4 = iron_cabinetLeg_1.clone();
+
+  iron_cabinet_box.position.set(0.085, -0.377, 0);
+  iron_cabinetLeg_1.position.set(-0.18, -0.779, -0.16);
+  iron_cabinetLeg_2.position.set(0.35, -0.779, -0.16);
+  iron_cabinetLeg_3.position.set(0.35, -0.779, 0.16);
+  iron_cabinetLeg_4.position.set(-0.18, -0.779, 0.16);
+
+  iron_cabinet.add(iron_cabinet_top);
+  iron_cabinet.add(iron_cabinet_box);
+  iron_cabinet.add(iron_cabinetLeg_1);
+  iron_cabinet.add(iron_cabinetLeg_2);
+  iron_cabinet.add(iron_cabinetLeg_3);
+  iron_cabinet.add(iron_cabinetLeg_4);
+  ////////////////////////////////////
+
+
+  compartment1.position.set(2.594, 1.005, 0);
+  compartment2.position.set(-1.6745, 1.005, 0);
+  compartment3.position.set(0, 1.005, -1.93);
+  compartment3.rotation.y = -Math.PI/2;
+  compartment4.position.set(-4.2485, 1.005, 0);
+  door_jmchen.position.set(0.305, 1.005, -0.317);
+  door_jmchen.rotation.y = Math.PI/4;
+  door_sunny.position.set(-3.92, 1.005, -0.317);
+  door_sunny.rotation.y = Math.PI/4;
+  doorknob_jmchen.position.set(0.6, 1, -0.5);
+  doorknob_sunny.position.set(-3.65, 1, -0.5);
+  cabinet.position.set(-0.2085, 0.5175, 0.9735);
+  desk.position.set(-0.8685, 0.902, 0.917);
+  desk1.position.set(1.745, 0.852, 0.46);
+  desk1.rotation.y = Math.PI/2;
+  desk2.position.set(2.972, 0.782, 0.584);
+  desk3.position.set(2.807, 0.866, 1.4135);
+  desk3.rotation.y = Math.PI/2;
+  desk4.position.set(2.854, 0.848, 2.106);
+  desk4.rotation.y = -Math.PI/2;
+  desk5.position.set(1.6205, 0.834, 2.106);
+  desk5.rotation.y = -Math.PI/2;
+  desk6.position.set(-2.892, 0.902, 0.917);
+  desk6.rotation.y = Math.PI;
+  iron_cabinet.position.set(-2.7025, 0.854, 2.068);
+
+  AR702.add(floor);
+  AR702.add(compartment1);
+  AR702.add(compartment2);
+  AR702.add(compartment3);
+  AR702.add(compartment4);
+  AR702.add(door_jmchen);
+  AR702.add(door_sunny);
+  AR702.add(doorknob_jmchen);
+  AR702.add(doorknob_sunny);
+  AR702.add(cabinet);
+  AR702.add(desk);
+  AR702.add(desk1);
+  AR702.add(desk2);
+  AR702.add(desk3);
+  AR702.add(desk4);
+  AR702.add(desk5);
+  AR702.add(desk6);
+  AR702.add(iron_cabinet);
+
+	target = buildTarget();
+	target.visible = false;
+	//target.position.y = 1e7;
+	//不想要一開始看到target... (失敗，原因在於unitize的scaleSet是以xyz最大值，1e7太大，整個AR702會小到看不見)
+
+	AR702.add(target);
+
+	line_j = jmchen_line ()
+	line_s = sunny_line ()
+	AR702.add(line_j);
+	AR702.add(line_s);
+
+	return AR702;
+}
+
+function jmchen_line () {
+	var jmchen = new THREE.Object3D();
+
+	pos1 = new THREE.Vector3(-3.6, 0.5, 3.8);
+  pos2 = new THREE.Vector3(-3.6, 0.5, 2.4);
+  pos3 = new THREE.Vector3(0.5, 0.5, 2.4);
+  pos4 = new THREE.Vector3(0.5, 0.5, 0);
+
+  var material = new THREE.LineBasicMaterial({color: 0xffff00});
+  var geometry = new THREE.Geometry();
+  geometry.vertices.push( pos1, pos2, pos3, pos4 );
+  var line = new THREE.Line( geometry, material );
+  jmchen.add(line);
+
+  return jmchen;
+}
+
+function sunny_line () {
+	var sunny = new THREE.Object3D();
+
+	pos1_s = new THREE.Vector3(-3.6, 0.5, 3.8);
+  pos2_s = new THREE.Vector3(-3.6, 0.5, 0);
+
+  var material = new THREE.LineBasicMaterial({color: 0x00ffff});
+  var geometry = new THREE.Geometry();
+  geometry.vertices.push( pos1_s, pos2_s );
+  var line = new THREE.Line( geometry, material );
+  sunny.add(line);
+
+  return sunny;
+}
+
+function buildTarget () {
+	var obj = new THREE.Object3D();
+	var ballMat = new THREE.MeshLambertMaterial({
+			color: 0xf2746b,
+			side: THREE.DoubleSide
+		});
+  var baseMat = new THREE.MeshLambertMaterial({
+			color: 0xf14d49,
+			side: THREE.DoubleSide
+		});
+  var ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 32, 32), ballMat);
+  var base = new THREE.Mesh(new THREE.TetrahedronGeometry(0.4, 0), baseMat);
+
+  base.rotation.x = Math.PI/(10/3);
+  base.rotation.y = Math.PI/4;
+
+  ball.position.y = 0.8;
+  base.position.y = 0.4;
+
+  obj.add(ball);
+  obj.add(base);
+
+  return obj;
+}
+
+function markerHide(){
+	var plane = new THREE.Object3D();
+	var material = new THREE.MeshBasicMaterial({color: 0xcccccc});
+	var geometry = new THREE.PlaneGeometry(1.1, 1.1); //marker顯示誤差會沒辦法隱藏全部，因此設大一點比較保險。
+	var mesh = new THREE.Mesh(geometry, material);
+	mesh.rotation.x = -Math.PI/2;
+	plane.add(mesh);
+	return plane;
+}
+</script></body>

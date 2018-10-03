@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+  </head>
+  <body>
+  	<div id='container' style='position:absolute;width:80vh;height:80vh'>
+		<canvas id='mycanvas'></canvas>
+		<button id='toggle' style='position:absolute;top:5%;left:45%'>toggle</button>
+		<p id='hud' style='position:absolute;bottom:5%;left:35%;color:yellow'></p>
+  	</div>
+
+<script src='https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+
+<script>
+var socket;
+var isTurn = [false, false];
+var myID, otherID;  // either 0 or 1
+var meshes = [];
+
+$('#toggle').click ( function() {
+
+	// tell server: I have toggled
+	socket.emit ('toggle', myID);
+
+});
+
+$(function () {
+
+	socket = io();
+
+	socket.on ('id_set', function(msg) {
+		console.log ('i am ' + msg);
+		// console.log (typeof (msg)) // Number
+		myID = msg;
+		meshes[myID].material.visible = true
+
+		//otherID = (myID + 1)%2
+		// id = 0, myID = 0
+		// id = 1, myID = 1, otherID = 0
+		// quick fix...
+		if (myID === 1) {
+			otherID = 0
+			meshes[otherID].material.visible = true
+		}
+		if (myID === 0) {
+			$('#hud').text ('I am client 0')
+		} else {
+			$('#hud').text ('I am client 1')
+		}
+
+	});
+
+	socket.on ('update_status', function (status) {
+		console.log (status)
+		for (let i = 0; i < status.length; i++) {
+			isTurn[status[i].id] = status[i].turn
+		}
+		console.log ('isTurn: '  + isTurn)
+
+	});
+
+	// is this necessary?!
+	socket.on ('new_id', function(msg) {
+		console.log ('new kid in town: ' + msg);
+		otherID = msg;
+		meshes[otherID].material.visible = true
+	})
+
+});
+
+init();
+animate();
+
+
+function init() {
+
+	//let mycanvas = $('#mycanvas')   // this does NOT work ...
+	let ww = $('#container').innerWidth();
+	let hh = $('#container').innerHeight();
+
+  	let mycanvas = document.getElementById ('mycanvas')
+    renderer = new THREE.WebGLRenderer({canvas: mycanvas});
+  	renderer.setSize(ww, hh);
+    renderer.setClearColor(0x888888);
+
+    scene = new THREE.Scene();
+
+    camera = new THREE.PerspectiveCamera(50, ww/hh, 1, 1000);
+    camera.position.z = 200;
+    camera.position.y = 100;
+
+    let gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+    scene.add(gridXZ);
+
+    let controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    var light = new THREE.PointLight( 0xffffff);
+	light.position.set( 50, 50, 50 );
+	scene.add( light )
+
+    ////////////////////////////////////////////////////////////////////////
+
+    var geometry = new THREE.BoxGeometry(60, 5, 5);
+    var material0 = new THREE.MeshLambertMaterial({color:0xffffff});
+
+    meshes[0] = new THREE.Mesh(geometry, material0);
+    scene.add(meshes[0]);
+
+    var material1 = new THREE.MeshLambertMaterial({color:0xff0000})
+    meshes[1] = new THREE.Mesh(geometry, material1);
+    scene.add (meshes[1])
+    meshes[0].position.x = -50
+    meshes[1].position.x = 50
+
+    meshes[0].material.visible = false
+    meshes[1].material.visible = false
+}
+
+function animate() {
+	if (myID !== undefined) {
+		if (isTurn[myID])
+			meshes[myID].rotation.y += 0.01;
+	}
+	if (otherID !== undefined) {
+		if (isTurn[otherID])
+			meshes[otherID].rotation.y += 0.01;
+	}
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+
+</script>
+</body>
+</html>

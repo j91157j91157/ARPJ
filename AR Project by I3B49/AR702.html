@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='../three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="../three.js/examples/vendor/three.js/examples/js/libs/stats.min.js"></script>
+<!-- ar.js -->
+<script src="../three.js/build/ar.js"></script>
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'><div style='position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	<a href="https://github.com/jeromeetienne/AR.js/" target="_blank">AR.js</a> - three.js mobile performance
+	<br/>
+	Contact me any time at <a href='https://twitter.com/jerome_etienne' target='_blank'>@jerome_etienne</a>
+</div><script>
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Init
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// init renderer
+	var renderer	= new THREE.WebGLRenderer({
+		// antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+
+
+	// array of functions for the rendering loop
+	var onRenderFcts= [];
+
+	// init scene and camera
+	var scene	= new THREE.Scene();
+
+	/// for picking
+	var raycaster = new THREE.Raycaster();
+	var mouse = new THREE.Vector2();
+	var pickables = [];
+	var cubeSpin = false;
+
+	// for HUD scene
+	// HUD area should be 1:1 on screen
+	// use NDC for picking
+	// (raycaster is not accurate since we cannot get the accurate position
+	// of the camera)
+	//
+	var sceneHUD = new THREE.Scene();
+	//let HoverW = window.innerHeight/window.innerWidth;
+	//var cameraHUD = new THREE.OrthographicCamera (-10,10,10*HoverW,-10*HoverW, -10,10);
+	//var square = new THREE.Mesh (new THREE.PlaneGeometry(4,4*HoverW), new THREE.MeshNormalMaterial());
+	var cameraHUD = new THREE.OrthographicCamera (-10,10,10,-10, -10,10);
+	var square = new THREE.Mesh (new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+	//一個 square會依照設備裝置的長寬比訂出一個相同比例的 rectangle
+	var square2 = new THREE.Mesh (new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({color: 0xffff00}));
+
+	//console.log (HoverW)
+	square.position.set (-8, -5.5, 0);
+	square2.position.set (-8, -3.5, 0);
+
+
+	sceneHUD.add (square);
+	sceneHUD.add (square2);
+
+	pickables.push (square);
+	pickables.push (square2);
+
+	window.addEventListener ('mousedown', onMouseDown, false);
+
+	function onMouseDown (event) {
+		event.preventDefault();
+  		mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  		mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+		console.log (mouse);
+
+		// use 2D algorithm
+		//position(0, 0, 0)  mouse.x < 0.2 && mouse.x > -0.2 && mouse.y < 0.3 && mouse.y > -0.3
+		if (mouse.x < -0.65 && mouse.x > -0.95 && mouse.y < -0.71 && mouse.y > -0.93){
+			console.log ('Blue');
+			cubeSpin = !cubeSpin;
+  	}
+		else if(mouse.x < -0.65 && mouse.x > -0.95 && mouse.y < -0.41 && mouse.y > -0.635){
+			console.log ('Yellow');
+			classroom.visible = !classroom.visible;
+		}
+		else {
+			console.log ('no hit');
+		}
+	}
+
+	function build702 () {
+
+	  var AR702 = new THREE.Object3D();
+
+	  var normalMat = new THREE.MeshNormalMaterial({
+			transparent : true,
+			opacity: 0.5,
+			side: THREE.DoubleSide
+		});
+	  var floor = new THREE.Mesh(new THREE.BoxGeometry(8.537, 0.05, 7.717), normalMat);
+	 	var compartment1 = new THREE.Mesh(new THREE.BoxGeometry(3.335, 2.01, 0.06), normalMat);
+	  var compartment2 = new THREE.Mesh(new THREE.BoxGeometry(3.352, 2.01, 0.06), normalMat);
+	  var compartment3 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.01, 0.06), normalMat);
+	  var compartment4 = new THREE.Mesh(new THREE.BoxGeometry(3.86, 2.01, 0.06), normalMat);
+	  var door_jmchen = new THREE.Mesh(new THREE.BoxGeometry(0.925, 2.01, 0.06), normalMat);
+	  var door_sunny = door_jmchen.clone();
+	  var cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.985, 1.884), normalMat);
+
+	  /////////////// Desk ///////////////
+	  var desk = new THREE.Object3D();
+	  var desktop = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.05, 1.774), normalMat);
+	  var deskLeg_L = new THREE.Mesh(new THREE.BoxGeometry(0.738, 0.852, 0.05), normalMat);
+	  var deskLeg_R = deskLeg_L.clone();
+	  deskLeg_L.position.set(-0.091, -0.451, 0.862);
+	  deskLeg_R.position.set(-0.091, -0.451, -0.862);
+
+	  desk.add(desktop);
+	  desk.add(deskLeg_L);
+	  desk.add(deskLeg_R);
+	  ////////////////////////////////////
+
+
+	  compartment1.position.set(2.594, 1.005, 0);
+	  compartment2.position.set(-1.6745, 1.005, 0);
+	  compartment3.position.set(-4.2485, 1.005, 0);
+	  compartment4.position.set(0, 1.005, -1.93);
+	  compartment4.rotation.y = -Math.PI/2;
+	  door_jmchen.position.set(0.305, 1.005, -0.317);
+	  door_jmchen.rotation.y = Math.PI/4;
+	  door_sunny.position.set(-3.92, 1.005, -0.317);
+	  door_sunny.rotation.y = Math.PI/4;
+	  cabinet.position.set(-0.2085, 0.4925, 0.9735);
+	  desk.position.set(-0.8685, 0.902, 0.917);
+
+	  AR702.add(floor);
+	  AR702.add(compartment1);
+	  AR702.add(compartment2);
+	  AR702.add(compartment3);
+	  AR702.add(compartment4);
+	  AR702.add(door_jmchen);
+	  AR702.add(door_sunny);
+	  AR702.add(cabinet);
+	  AR702.add(desk);
+
+	  return AR702;
+	}
+
+	function unitize (object, targetSize) {
+			// find bounding box of 'object'
+			var box3 = new THREE.Box3();
+			box3.setFromObject (object);
+			var size = new THREE.Vector3();
+			size.subVectors (box3.max, box3.min);
+			var center = new THREE.Vector3();
+			center.addVectors(box3.max, box3.min).multiplyScalar (0.5);
+			console.log ('center: ' + center.x + ', '+center.y + ', '+center.z );
+			console.log ('size: ' + size.x + ', ' +  size.y + ', '+size.z );
+			// uniform scaling according to objSize
+			var objSize = Math.max (size.x, size.y, size.z);
+			var scaleSet = targetSize/objSize;
+			var theObject =  new THREE.Object3D();
+			theObject.add (object);
+			object.scale.set (scaleSet, scaleSet, scaleSet);
+			object.position.set (-center.x*scaleSet, -center.y*scaleSet + size.y/2*scaleSet, -center.z*scaleSet);
+			return theObject;
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Initialize a basic camera
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// Create a camera
+	var camera = new THREE.Camera();
+	scene.add(camera);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	var arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()
+		arToolkitSource.copySizeTo(renderer.domElement)
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+		}
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+
+	// create atToolkitContext
+	var arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + 'data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	// update artoolkit on every frame
+	onRenderFcts.push(function(){
+		if( arToolkitSource.ready === false )	return
+
+		arToolkitContext.update( arToolkitSource.domElement )
+	})
+
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+
+	var markerRoot = new THREE.Group
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + 'data/data/patt.hiro'
+		// patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji'
+	})
+
+	// add a cubeGeometry
+
+	var geometry	= new THREE.CubeGeometry(1,1,1);
+	var material	= new THREE.MeshNormalMaterial({
+		transparent : true,
+		opacity: 0.5,
+		side: THREE.DoubleSide
+	});
+	var mesh	= new THREE.Mesh( geometry, material );
+	mesh.position.y	= geometry.parameters.height/2;
+
+	//pickables.push (mesh);
+
+//	arWorldRoot.add( mesh );
+	//markerRoot.add (mesh);
+	var classroom = build702();
+	classroom.rotation.x = -Math.PI/2;
+	markerRoot.add (unitize (classroom, 2));
+
+	/// add gridhelper
+	//var gridXZ = new THREE.GridHelper(2,10);
+	//markerRoot.add (gridXZ);
+
+	//scene.add (gridXZ);
+
+	onRenderFcts.push(function(){
+		if (cubeSpin) classroom.rotation.y += 0.01;
+	})
+
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+	var stats = new Stats();
+	document.body.appendChild( stats.dom );
+	// render the scene
+	onRenderFcts.push(function(){
+		renderer.clear();
+		renderer.render( scene, camera );
+
+		square.material.visible = markerRoot.visible;
+		square2.material.visible = markerRoot.visible;
+
+		renderer.render (sceneHUD, cameraHUD);
+
+		stats.update();
+	})
+
+	// run the rendering loop
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		onRenderFcts.forEach(function(onRenderFct){
+			onRenderFct(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+</script>
+</body>

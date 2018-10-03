@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; }
+      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+      form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #messages { list-style-type: none; margin: 0; padding: 0; }
+      #messages li { padding: 5px 10px; }
+      #messages li:nth-child(odd) { background: #eee; }
+      #messages { margin-bottom: 40px }
+    </style>
+  </head>
+  <body>
+  	<div id='container' style='background:pink; width:40vw; height:40vw'>
+  	</div>
+  	<button id='toggle'>toggle</button>
+  	<div style="overflow: scroll">
+    <ul id="messages" ></ul>
+    </div>
+    
+    <form action="">
+      <input id="m" autocomplete="off" /><button>Send</button>
+    </form>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.min.js"></script>
+	<script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script>
+    var socket;
+var isTurn = false;
+    
+    $('#toggle').click ( function() {
+    	socket.emit ('toggle message', 33);
+    	return false;
+    });
+    
+      $(function () {
+        //var socket = io();
+        socket = io();
+        
+        $('form').submit(function(){
+          socket.emit('chat', $('#m').val());
+          $('#m').val('');
+          return false;
+        });
+        
+        socket.on('chat', function(msg){
+          console.log ('receive chat');
+          $('#messages').append($('<li>').text(msg));
+          // scrollTo ....
+          //window.scrollTo(0, document.body.scrollHeight);
+        });
+       
+        socket.on('toggle message', function(msg) {
+        	console.log ('receive toggle ');
+        	doToggle();
+        });
+      });
+      
+      init();
+      animate();
+      
+function doToggle() {
+	isTurn = !isTurn;	
+}
+
+function init() {
+
+    scene = new THREE.Scene();
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+    camera.position.z = 500;
+    scene.add(camera);
+    
+    let gridXZ = new THREE.GridHelper(200, 20, 'red', 'white');
+    scene.add(gridXZ);
+
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize($('#container').innerWidth(), $('#container').innerHeight());
+    renderer.setClearColor(0x888888);
+
+    let controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    $('#container').append(renderer.domElement);
+    ////////////////////////////////////////////////////////////////////////
+    
+    var geometry = new THREE.BoxGeometry(100, 20, 20);
+    var material = new THREE.MeshNormalMaterial();
+
+    mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    
+}
+
+function animate() {
+	if (isTurn) {
+		mesh.rotation.y += 0.01;
+	}
+	
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+
+      	
+    </script>
+  </body>
+</html>

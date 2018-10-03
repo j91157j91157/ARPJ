@@ -1,0 +1,323 @@
+
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='../three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="../three.js/examples/vendor/three.js/examples/js/libs/stats.min.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<!-- ar.js -->
+<script src="../three.js/build/ar.js"></script>
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	NDC X:<input id='X' type='text'>, NDC Y:<input id='Y' type='text'>
+</div>
+
+<script>
+
+
+class Button {
+	constructor (size, x, y){
+		this.size = size;
+		this.centerX = x;
+		this.centerY = y;
+	}
+	d1To (v) { // 1-norm
+		return Math.abs (v[0]-this.centerX) + Math.abs(v[1]-this.centerY);
+	}
+	d2To (v) { // 2-norm
+		return Math.sqrt ( (v[0]-this.centerX)*(v[0]-this.centerX)
+				+ (v[1]-this.centerY)*(v[1]-this.centerY) );
+	}
+	dInfTo (v) { // inf-norm
+		return Math.max( Math.abs (v[0]-this.centerX), Math.abs(v[1]-this.centerY) )
+	}
+}
+// global variables
+var renderer, scene, camera;
+var sceneHUD, cameraHUD;
+var stats;
+var markerRoot;
+var markerHiro;
+var arToolKitSource, arToolKitContext;
+var raycaster, pickables;
+var square, square2;
+var classroom;
+var cubeSpin = false;
+var whRatio, halfW, halfH;
+
+init();
+animate();
+
+function init() {
+	// https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	//let _iOSDevice = !!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform);
+	let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+	console.log ('iOS: ' + _iOSDevice)
+
+	// init renderer
+	renderer	= new THREE.WebGLRenderer({
+		// antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+
+	raycaster = new THREE.Raycaster();
+	pickables = [];
+	// init scene and camera
+	scene	= new THREE.Scene();
+	camera = new THREE.Camera();
+	scene.add(camera);
+
+	whRatio = window.innerWidth/window.innerHeight;
+	halfH = 10;
+	halfW = halfH * whRatio;
+
+	sceneHUD = new THREE.Scene();
+	cameraHUD = new THREE.OrthographicCamera (-halfW,halfW, halfH,-halfH, -10,10);
+
+	var buttonSize = halfH/3;
+	//square = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize), new THREE.MeshBasicMaterial({color: 0x00ffff}));
+	//一個 square會依照設備裝置的長寬比訂出一個相同比例的 rectangle
+	//square2 = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize), new THREE.MeshBasicMaterial({color: 0xffff00}));
+
+	square = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize), new THREE.MeshBasicMaterial({color:0x00ffff, transparent:true, opacity:0.8}));
+	square2 = new THREE.Mesh (new THREE.PlaneGeometry(buttonSize, buttonSize), new THREE.MeshBasicMaterial({color:0xffff00, transparent:true, opacity:0.8}));
+	button = new Button (buttonSize, 0, -halfH/2);
+	square.position.set (button.centerX+4, button.centerY, 0);
+	square2.position.set (button.centerX-4, button.centerY, 0);
+
+	sceneHUD.add (square);
+	sceneHUD.add (square2);
+
+	pickables.push (square);
+	pickables.push (square2);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()
+		arToolkitSource.copySizeTo(renderer.domElement)
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+		}
+
+		whRatio = window.innerWidth/window.innerHeight;
+		halfW = halfH * whRatio;
+		cameraHUD.left = -halfW;
+		cameraHUD.right = halfW;
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + 'data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	markerRoot = new THREE.Group()
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + 'data/data/patt.hiro'
+	})
+
+
+	classroom = build702();
+	classroom.rotation.x = -Math.PI/2;
+	markerRoot.add (unitize (classroom, 2));
+
+	//FPS
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+
+	//iOS touch介面?
+	if (_iOSDevice)
+		window.addEventListener('touchstart', onTouchStart, false)
+	else
+		window.addEventListener ('mousedown', onMouseDown, false);
+}
+
+function onTouchStart (event) {
+	console.log ('in touch start')
+
+	if (event.touches.length == 1) {
+
+		event.preventDefault();
+		//cubeSpin = !cubeSpin;
+		let touchX = (event.touches[0].pageX / window.innerWidth) * 2 - 1;
+		let touchY = -(event.touches[0].pageY / window.innerHeight) * 2 + 1;
+		$("#X").val(touchX.toFixed(3));
+		$("#Y").val(touchY.toFixed(3));
+
+		if (touchX < -0.65 && touchX > -0.946 && touchY < -0.63 && touchY > -0.83){
+			console.log ('Blue');
+			cubeSpin = !cubeSpin;
+		}
+		else if(touchX < -0.65 && touchX > -0.946 && touchY < -0.36 && touchY > -0.56){
+			console.log ('Yellow');
+			classroom.visible = !classroom.visible;
+		}
+		else {
+			console.log ('no hit');
+		}
+	}
+	/*else if (event.touches.length == 2) {
+		event.preventDefault();
+		classroom.visible = !classroom.visible;
+	}*/
+}
+
+function onMouseDown (event) {
+		event.preventDefault();
+  	let mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+  	let mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+		$("#X").val(mouseX.toFixed(3));
+		$("#Y").val(mouseY.toFixed(3));
+
+		// use 2D algorithm
+		//position(0, 0, 0)  mouse.x < 0.2 && mouse.x > -0.2 && mouse.y < 0.3 && mouse.y > -0.3
+		if (mouseX < -0.65 && mouseX > -0.95 && mouseY < -0.71 && mouseY > -0.93){
+			console.log ('Blue');
+			cubeSpin = !cubeSpin;
+  	}
+		else if(mouseX < -0.65 && mouseX > -0.95 && mouseY < -0.41 && mouseY > -0.635){
+			console.log ('Yellow');
+			classroom.visible = !classroom.visible;
+		}
+		else {
+			console.log ('no hit');
+		}
+}
+
+function unitize (object, targetSize) {
+		// find bounding box of 'object'
+		var box3 = new THREE.Box3();
+		box3.setFromObject (object);
+		var size = new THREE.Vector3();
+		size.subVectors (box3.max, box3.min);
+		var center = new THREE.Vector3();
+		center.addVectors(box3.max, box3.min).multiplyScalar (0.5);
+		console.log ('center: ' + center.x + ', '+center.y + ', '+center.z );
+		console.log ('size: ' + size.x + ', ' +  size.y + ', '+size.z );
+		// uniform scaling according to objSize
+		var objSize = Math.max (size.x, size.y, size.z);
+		var scaleSet = targetSize/objSize;
+		var theObject =  new THREE.Object3D();
+		theObject.add (object);
+		object.scale.set (scaleSet, scaleSet, scaleSet);
+		object.position.set (-center.x*scaleSet, -center.y*scaleSet + size.y/2*scaleSet, -center.z*scaleSet);
+		return theObject;
+}
+
+function build702 () {
+	  var AR702 = new THREE.Object3D();
+	  var normalMat = new THREE.MeshNormalMaterial({
+			transparent : true,
+			opacity: 0.5,
+			side: THREE.DoubleSide
+		});
+	  var floor = new THREE.Mesh(new THREE.BoxGeometry(8.537, 0.05, 7.717), normalMat);
+	 	var compartment1 = new THREE.Mesh(new THREE.BoxGeometry(3.335, 2.01, 0.06), normalMat);
+	  var compartment2 = new THREE.Mesh(new THREE.BoxGeometry(3.352, 2.01, 0.06), normalMat);
+	  var compartment3 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.01, 0.06), normalMat);
+	  var compartment4 = new THREE.Mesh(new THREE.BoxGeometry(3.86, 2.01, 0.06), normalMat);
+	  var door_jmchen = new THREE.Mesh(new THREE.BoxGeometry(0.925, 2.01, 0.06), normalMat);
+	  var door_sunny = door_jmchen.clone();
+	  var cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.985, 1.884), normalMat);
+
+	  /////////////// Desk ///////////////
+	  var desk = new THREE.Object3D();
+	  var desktop = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.05, 1.774), normalMat);
+	  var deskLeg_L = new THREE.Mesh(new THREE.BoxGeometry(0.738, 0.852, 0.05), normalMat);
+	  var deskLeg_R = deskLeg_L.clone();
+	  deskLeg_L.position.set(-0.091, -0.451, 0.862);
+	  deskLeg_R.position.set(-0.091, -0.451, -0.862);
+
+	  desk.add(desktop);
+	  desk.add(deskLeg_L);
+	  desk.add(deskLeg_R);
+	  ////////////////////////////////////
+
+	  compartment1.position.set(2.594, 1.005, 0);
+	  compartment2.position.set(-1.6745, 1.005, 0);
+	  compartment3.position.set(-4.2485, 1.005, 0);
+	  compartment4.position.set(0, 1.005, -1.93);
+	  compartment4.rotation.y = -Math.PI/2;
+	  door_jmchen.position.set(0.305, 1.005, -0.317);
+	  door_jmchen.rotation.y = Math.PI/4;
+	  door_sunny.position.set(-3.92, 1.005, -0.317);
+	  door_sunny.rotation.y = Math.PI/4;
+	  cabinet.position.set(-0.2085, 0.4925, 0.9735);
+	  desk.position.set(-0.8685, 0.902, 0.917);
+
+	  AR702.add(floor);
+	  AR702.add(compartment1);
+	  AR702.add(compartment2);
+	  AR702.add(compartment3);
+	  AR702.add(compartment4);
+	  AR702.add(door_jmchen);
+	  AR702.add(door_sunny);
+	  AR702.add(cabinet);
+	  AR702.add(desk);
+
+	  return AR702;
+}
+
+function animate() {
+	requestAnimationFrame (animate);
+
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+
+	renderer.clear();
+	renderer.render (scene, camera);
+	renderer.render (sceneHUD, cameraHUD);
+
+	square.material.visible = markerRoot.visible;
+	square2.material.visible = markerRoot.visible;
+	if (cubeSpin) classroom.rotation.y += 0.01;
+
+	stats.update();
+}
+</script></body>
