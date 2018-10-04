@@ -177,23 +177,6 @@ function init() {
 		window.addEventListener('touchstart', onTouchStart, false)
 	else
 		window.addEventListener ('mousedown', onMouseDown, false);
-
-  ////////////////////////////////////////////////////////////////////////
-  var geometry = new THREE.BoxGeometry(.6, .05, .05);
-  var material0 = new THREE.MeshLambertMaterial({color:0xffffff});
-
-  meshes[0] = new THREE.Mesh(geometry, material0);
-  markerHiro.add(meshes[0]);
-
-  var material1 = new THREE.MeshLambertMaterial({color:0xff0000})//關鍵點，移到kanji上
-  meshes[1] = new THREE.Mesh(geometry, material1);
-  markerKanji.add(meshes[1]);
-
-  //meshes[0].position.x = -0.5;
-  //meshes[1].position.x = 0.5;
-
-
-  meshes[1].material.visible = false;
 }
 
 function animate() {
