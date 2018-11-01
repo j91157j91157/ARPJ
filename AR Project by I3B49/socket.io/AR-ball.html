@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/examples/vendor/three.js/examples/js/libs/stats.min.js"></script>
+<script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+<!-- ar.js -->
+<script src="https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/build/ar.js"></script>
+
+<head>
+  <title>Socket.IO chat</title>
+</head>
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	NDC X:<input id='X' type='text'>, NDC Y:<input id='Y' type='text'>
+  <p id='hud' style='position:absolute;top:5%;left:50%;color:yellow'></p>
+  <button id='toggle' style='position:absolute;top:70px;left:50%'>toggle</button>
+</div>
+
+<script>
+class Ball {
+	constructor () {
+  	this.pos = new THREE.Vector3(0, 0, 0);
+    this.vel = new THREE.Vector3();
+    this.force = new THREE.Vector3(0,-0.1,0);
+    this.rebirth();
+  }
+
+  update (dt) {
+		this.vel.add (this.force.clone().multiplyScalar(dt));
+  	this.pos.add (this.vel.clone().multiplyScalar(dt));
+		if (this.pos.y < 0) {
+      this.pos.y = 0;
+    	this.stopped = true;
+    }
+	}
+
+  getPos() {
+  	return this.pos;
+  }
+
+  get isStopped () {
+  	return this.stopped === true ? 1: 0;
+  }
+
+  rebirth() {
+  	this.stopped = false;
+  	this.vel.set (v0, v1, v2);
+  }
+}
+var renderer, scene, camera;
+var sceneHUD, cameraHUD;
+var stats;
+var pickables;
+var markerHiro, markerKanji;
+var arToolKitSource, arToolKitContext;
+var socket;
+var isTurn = [true, true];
+var myID, otherID;  // either 0 or 1
+var clock = new THREE.Clock();
+var balls = [];
+var meshes = [];
+var a, b;
+var isVectorX = [0, 0];
+var isVectorY = [0.4, 0.4];
+var isVectorZ = [0, 0];
+var v0 = 0, v1 = 0.6, v2 = 0;
+
+$('#toggle').click ( function() {
+
+	// tell server: I have toggled
+	socket.emit ('toggle', myID);
+
+  var param = {v:[0, 0.5, 0]};
+  var outputStr = jQuery.param(param);
+
+  console.log(outputStr);
+
+  $.get("http://127.0.0.1:3000?" + outputStr, function(data){
+
+    if(data && data.output){
+      console.log(data.output);
+    }
+  });
+  v0 = isVectorX[myID];
+  v1 = isVectorY[myID];
+  v2 = isVectorZ[myID];
+  console.log(v0, v1, v2);
+
+});
+
+$(function () {
+
+	socket = io();
+
+	socket.on ('id_set', function(msg) {
+		console.log ('i am ' + msg);
+		// console.log (typeof (msg)) // Number
+		myID = msg;
+		meshes[myID].material.visible = true
+
+		//otherID = (myID + 1)%2
+		// id = 0, myID = 0
+		// id = 1, myID = 1, otherID = 0
+		// quick fix...
+		if (myID === 1) {
+			otherID = 0
+			meshes[otherID].material.visible = true
+		}
+		if (myID === 0) {
+			$('#hud').text ('I am client 0')
+		} else {
+			$('#hud').text ('I am client 1')
+		}
+
+	});
+
+	socket.on ('update_status', function (status) {
+		console.log (status)
+		for (let i = 0; i < status.length; i++) {
+			isTurn[status[i].id] = status[i].turn;
+      isVectorX[status[i].id] = parseFloat(status[i].v0);
+      isVectorY[status[i].id] = parseFloat(status[i].v1);
+      isVectorZ[status[i].id] = parseFloat(status[i].v2);
+		}
+ 		console.log ('isTurn: '  + isTurn)
+
+	});
+
+	// is this necessary?!
+	socket.on ('new_id', function(msg) {
+		console.log ('new kid in town: ' + msg);
+		otherID = msg;
+		meshes[otherID].material.visible = true
+	})
+
+  //新增向量接收
+  /*socket.on ('vectorX', function(vec0, vec1, vec2) {
+      console.log ('Vector = [' + vec0 + ', ' + vec1 + ', ' + vec2 + ']');
+  		v0 = vec0;
+      v1 = vec1;
+      v2 = vec2;
+	})*/
+
+});
+
+init();
+animate();
+
+
+function init() {
+  // https://stackoverflow.com/questions/9038625/detect-if-device-is-ios?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+	//let _iOSDevice = !!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform);
+	let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+	console.log ('iOS: ' + _iOSDevice);
+
+	//let mycanvas = $('#mycanvas')   // this does NOT work ...
+  renderer	= new THREE.WebGLRenderer({
+		//antialias	: true,
+		alpha: true
+	});
+	renderer.setSize( window.innerWidth, window.innerHeight );
+  renderer.setClearColor(new THREE.Color('lightgrey'), 0);
+  renderer.domElement.style.position = 'absolute';
+	renderer.domElement.style.top = '0px';
+	renderer.domElement.style.left = '0px';
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+
+	//renderer shadow
+	renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  pickables = [];
+
+  scene = new THREE.Scene();
+  camera = new THREE.Camera();
+  scene.add(camera);
+
+  sceneHUD = new THREE.Scene();
+	cameraHUD = new THREE.OrthographicCamera (-10,10,10,-10, -10,10);
+
+	square = new THREE.Mesh (new THREE.PlaneGeometry(3, 1.5), new THREE.MeshBasicMaterial({color:0x00ffff, transparent:true, opacity:0.8}));
+  square.position.set (-8, -5.5, 0);
+
+  sceneHUD.add (square);
+	pickables.push (square);
+
+  ////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()
+		arToolkitSource.copySizeTo(renderer.domElement)
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+		}
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+  markerHiro = addMarkerHiro();
+  markerKanji = addMarkerKanji();
+	scene.add (markerHiro);
+	scene.add (markerKanji);
+
+  stats = new Stats();
+	document.body.appendChild(stats.dom);
+
+  //iOS touch介面?
+	if (_iOSDevice)
+		window.addEventListener('touchstart', onTouchStart, false)
+	else
+		window.addEventListener ('mousedown', onMouseDown, false);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement )
+
+  for (let i = 0; i < balls.length; i++) {
+  	meshes[i].position.copy (balls[i].getPos());
+  }
+
+  var dt = clock.getDelta ();
+
+  balls.forEach (function (ball) {
+	    ball.update (dt*3);
+  })
+
+  a = meshes[0].position.y;
+  b = meshes[1].position.y;
+
+  $("#X").val(a.toFixed(3));
+  $("#Y").val(b.toFixed(3));
+
+  //console.log ('Vector = [' + isVectorX[myID] + ', ' + isVectorY[myID] + ', ' + isVectorZ[myID] + ']');
+
+  //console.log(isVectorX[myID]);
+	if (myID !== undefined) {
+		if (isTurn[myID]){
+      if(balls[myID].isStopped) balls[myID].rebirth();
+    }
+	}
+	if (otherID !== undefined) {
+		if (isTurn[otherID]){
+      if(balls[otherID].isStopped) balls[otherID].rebirth();
+    }
+	}
+  //square.material.visible = markerHiro.visible;
+  /////////////////////////////////
+  renderer.clear();
+  renderer.render (scene, camera);
+  renderer.render (sceneHUD, cameraHUD);
+  stats.update();
+}
+
+function addMarkerHiro(){
+	let markerRoot = new THREE.Group()
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/patt.hiro'
+	})
+
+  //light
+  var light = new THREE.PointLight( 0xffffff);
+	light.position.set( .5, .5, .5 );
+	markerRoot.add(light);
+
+  let gridXZ = new THREE.GridHelper(2, 10, 'red', 'white');
+  //markerRoot.add(gridXZ);
+
+  var geometry = new THREE.SphereGeometry(0.1, 20, 20);
+  var material = new THREE.MeshBasicMaterial({color:0x00ffff});
+
+  balls[0] = new Ball();
+  meshes[0] = new THREE.Mesh(geometry, material);
+  markerRoot.add(meshes[0]);
+  meshes[0].material.visible = false;
+
+	return markerRoot;
+}
+
+function addMarkerKanji () {
+	let markerRootKanji = new THREE.Group();
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRootKanji, {
+		type : 'pattern',
+		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/patt.kanji'
+	})
+
+  //light
+  var light = new THREE.PointLight( 0xffffff);
+	light.position.set( .5, .5, .5 );
+	markerRootKanji.add(light);
+
+  let gridXZ = new THREE.GridHelper(2, 10, 'red', 'white');
+  //markerRootKanji.add(gridXZ);
+
+  var geometry = new THREE.SphereGeometry(0.1, 20, 20);
+  var material = new THREE.MeshBasicMaterial({color:0xff00ff});
+
+  balls[1] = new Ball();
+  meshes[1] = new THREE.Mesh(geometry, material);
+  markerRootKanji.add(meshes[1]);
+  meshes[1].material.visible = false;
+
+	return markerRootKanji;
+}
+
+function onTouchStart (event) {
+	console.log ('in touch start')
+
+	if (event.touches.length == 1) {
+
+		event.preventDefault();
+		//cubeSpin = !cubeSpin;
+		let touchX = (event.touches[0].pageX / window.innerWidth) * 2 - 1;
+		let touchY = -(event.touches[0].pageY / window.innerHeight) * 2 + 1;
+		//$("#X").val(x.toFixed(3));
+		//$("#Y").val(y.toFixed(3));
+
+		if (touchX < -0.65 && touchX > -0.95 && touchY < -0.63 && touchY > -0.83){
+			socket.emit ('toggle', myID);
+		}
+		else {
+			console.log ('no hit');
+		}
+	}
+	/*else if (event.touches.length == 2) {
+		event.preventDefault();
+		classroom.visible = !classroom.visible;
+	}*/
+}
+
+function onMouseDown (event) {
+		event.preventDefault();
+  	let mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+  	let mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+		//$("#X").val(x.toFixed(3));
+		//$("#Y").val(y.toFixed(3));
+
+		// use 2D algorithm
+		//position(0, 0, 0)  mouse.x < 0.2 && mouse.x > -0.2 && mouse.y < 0.3 && mouse.y > -0.3
+		if(mouseX < -0.65 && mouseX > -0.95 && mouseY < -0.63 && mouseY > -0.83){
+			socket.emit ('toggle', myID);
+      ///////////
+      var param = {v:[0, 0.2, 0]};
+      var outputStr = jQuery.param(param);
+
+      console.log(outputStr);
+
+      $.get("http://127.0.0.1:3000?" + outputStr, function(data){
+
+        if(data && data.output){
+          console.log(data.output);
+        }
+      });
+      v0 = isVectorX[myID];
+      v1 = isVectorY[myID];
+      v2 = isVectorZ[myID];
+      //console.log ('Vector = [' + v0 + ', ' + v1 + ', ' + v2 + ']');
+		}
+		else {
+			console.log ('no hit');
+		}
+}
+
+</script>
+</body>
