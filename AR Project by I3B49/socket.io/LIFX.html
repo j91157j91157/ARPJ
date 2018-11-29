@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/examples/vendor/three.js/build/three.min.js'></script>
+<script src="https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/examples/vendor/three.js/examples/js/libs/stats.min.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<!--<script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>-->
+<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+<!-- ar.js -->
+<script src="https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/build/ar.js"></script>
+<!-- GLSL -->
+<script id="myVertexShader" type="x-shader/x-vertex">
+  varying vec3 objpos;
+  void main() {
+  	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    objpos = position;
+  }
+</script>
+<script id="myFragmentShader" type="x-shader/x-fragment">
+varying vec3 objpos;
+
+// from: http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+void main() {
+	float theta = atan (objpos.y, objpos.x);
+  theta = theta < 0.0 ? theta + 6.2832 : theta;
+	float hue = theta/6.2832;
+  float radius = sqrt (objpos.x*objpos.x + objpos.y*objpos.y);
+  float sat = (radius - 1.)/1.;
+  vec3 hsv = vec3 (hue, sat, 1.0);
+  vec3 rgb = hsv2rgb (hsv);
+  gl_FragColor = vec4(rgb, 1.0);
+}
+</script>
+
+<head>
+  <title>LIFX AR</title>
+</head>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
+<div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+<!--<button id="lightOn" style="width:40%">Light On</button>-->
+</div>
+
+<script>
+/*$('#Red').click (
+  function() {
+  	$.get( "http://127.0.0.1:3000/red", function (data) {
+  		console.log (data)
+  	});
+  }
+)*/
+
+// global variables
+var renderer, scene, camera;
+var sceneHUD, cameraHUD;
+var markerRoot;
+var markerHiro;
+var arToolKitSource, arToolKitContext;
+var ring, bulb, power;
+var toggle = false;
+
+init();
+animate();
+
+function init() {
+	let _iOSDevice = !!navigator.platform.match(/iPhone|iPod|iPad/);
+	console.log ('iOS: ' + _iOSDevice)
+
+	// init renderer
+	renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// for multi-pass rendering
+	renderer.autoClear = false;
+
+	// init scene and camera
+	scene	= new THREE.Scene();
+	camera = new THREE.Camera();
+	scene.add(camera);
+
+	sceneHUD = new THREE.Scene();
+	cameraHUD = new THREE.OrthographicCamera (-10,10,10,-10, -10,10);
+
+  meshMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      lightpos: {
+        type: 'v3',
+        value: new THREE.Vector3()
+      }
+    },
+    vertexShader: document.getElementById('myVertexShader').textContent,
+    fragmentShader: document.getElementById('myFragmentShader').textContent
+  });
+
+	ring = new THREE.Mesh (new THREE.RingGeometry(1,2,32), meshMaterial) //半徑比原來再除以 10
+  sceneHUD.add (ring)
+  //ring.position.y = -0.3
+
+  picker = new THREE.Mesh (new THREE.RingGeometry(0.08,0.15, 20), new THREE.MeshBasicMaterial());
+  picker.position.set (0, -0.15, 0);
+  sceneHUD.add (picker);
+
+  var loader = new THREE.TextureLoader();
+  loader.setCrossOrigin ('');
+  var powerTexture = loader.load('https://i.imgur.com/UKerLCL.png');
+  var powerMat = new THREE.MeshBasicMaterial({
+    map: powerTexture,
+    side: THREE.FrontSide,
+    transparent: true
+  });
+  var powerGeo = new THREE.CircleGeometry( 0.9, 32 );
+
+  power = new THREE.Mesh( powerGeo, powerMat );
+  sceneHUD.add (power);
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+	arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',
+	})
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()
+		arToolkitSource.copySizeTo(renderer.domElement)
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+		}
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+
+	arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	markerRoot = new THREE.Group();
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/patt.hiro'
+	})
+
+	//light
+	var ambientLight = new THREE.AmbientLight( 0x888888 );
+	markerRoot.add( ambientLight );
+
+	var light = new THREE.PointLight( 0xffffff, 1, 100 );
+	light.position.set( 25, 25, -50 );
+	markerRoot.add( light );
+
+	var gridXZ = new THREE.GridHelper(100, 10, 'red', 'white');
+  //markerRoot.add(gridXZ);
+
+  var geometry = new THREE.SphereGeometry(0.2, 0.3, 36);//new THREE.BoxGeometry(1, 1, 1);
+  bulb = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({color:'white'}));
+  markerRoot.add(bulb);
+  bulb.position.y = 0.2;//0.5
+
+	//iOS touch介面?
+	if (_iOSDevice)
+		window.addEventListener('touchstart', onTouchStart, false)
+	else
+		window.addEventListener ('mousedown', onMouseDown, false);
+}
+
+function onTouchStart (event) {
+	console.log ('in touch start')
+	if (event.touches.length == 1) {
+    event.preventDefault();
+    let touchX = (event.touches[0].pageX / window.innerWidth) * 2 - 1;
+		let touchY = -(event.touches[0].pageY / window.innerHeight) * 2 + 1;
+  	touchX *= 10; //7.5
+    touchY *= 6.5; //不能10 需要問老師求解。
+    picker.position.set (touchX, touchY, 0);
+
+    let tmp = Math.atan2 (touchY-(/*-3*/0), touchX-(0))
+    tmp = tmp < 0 ? tmp + Math.PI*2 : tmp;
+    let hue = tmp/Math.PI/2;
+
+    let radius = new THREE.Vector2(touchX, touchY).distanceTo (new THREE.Vector2(0,/*-3*/0));
+    let sat = (radius-1)/1;
+
+    // picker position fixed
+    let angle = Math.atan2( touchY-(/*-3*/0), touchX-(0) );
+    if ( angle < 0 ) angle += 2 * Math.PI;
+
+    if (radius < 0.9) {
+      if(toggle){
+        $.get( "http://127.0.0.1:3000/turnoff", function (res) {
+      		console.log (res)
+      	});
+        toggle = !toggle;
+      }
+      else {
+        $.get( "http://127.0.0.1:3000/turnon", function (res) {
+      		console.log (res)
+      	});
+        toggle = !toggle;
+      }
+    }
+
+    if (radius < 1) {
+    	picker.position.set (1*Math.cos(angle), 1*Math.sin(angle)/*-30*/, 0);
+      hue = angle/Math.PI/2;
+    }
+    else if (radius > 2) {
+    	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
+    	hue = angle/Math.PI/2;
+    }
+
+  	console.log (hue)
+    //console.log ("半徑" + radius);
+    //console.log ("角度" + angle);
+  	bulb.material.emissive.setHSL (hue, sat, 0.5);
+
+    //LIFX light color 傳送
+    var param = {color:[hue, sat]};
+    var outputStr = jQuery.param(param);
+
+    console.log(outputStr);
+
+    $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){
+      console.log (data)
+    });
+	}
+}
+
+function onMouseDown (event) {
+  event.preventDefault();
+  let mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+  let mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+	mouseX *= 10; //7.5
+  mouseY *= 6.5; //不能10 需要問老師求解。
+  picker.position.set (mouseX, mouseY, 0);
+
+  let tmp = Math.atan2 (mouseY-(/*-3*/0), mouseX-(0))
+  tmp = tmp < 0 ? tmp + Math.PI*2 : tmp;
+  let hue = tmp/Math.PI/2;
+
+  let radius = new THREE.Vector2(mouseX, mouseY).distanceTo (new THREE.Vector2(0,/*-3*/0));
+  let sat = (radius-1)/1;
+
+  // picker position fixed
+  let angle = Math.atan2( mouseY-(/*-3*/0), mouseX-(0) );
+  if ( angle < 0 ) angle += 2 * Math.PI;
+
+  if (radius < 0.9) {
+    if(toggle){
+      $.get( "http://127.0.0.1:3000/turnoff", function (res) {
+    		console.log (res)
+    	});
+      toggle = !toggle;
+    }
+    else {
+      $.get( "http://127.0.0.1:3000/turnon", function (res) {
+    		console.log (res)
+    	});
+      toggle = !toggle;
+    }
+  }
+
+  if (radius < 1) {
+  	picker.position.set (1*Math.cos(angle), 1*Math.sin(angle)/*-30*/, 0);
+    hue = angle/Math.PI/2;
+  }
+  else if (radius > 2) {
+  	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
+  	hue = angle/Math.PI/2;
+  }
+
+	console.log (hue)
+  //console.log ("半徑" + radius);
+  //console.log ("角度" + angle);
+	bulb.material.emissive.setHSL (hue, sat, 0.5);
+
+  //LIFX light color 傳送
+  var param = {color:[hue, sat]};
+  var outputStr = jQuery.param(param);
+
+  console.log(outputStr);
+
+  $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){
+    console.log (data)
+  });
+}
+
+function animate() {
+	requestAnimationFrame (animate);
+
+	if( arToolkitSource.ready === false )	return
+	arToolkitContext.update( arToolkitSource.domElement );
+
+  ring.material.visible = markerRoot.visible;
+  power.material.visible = markerRoot.visible;
+  picker.material.visible = markerRoot.visible;
+
+  renderer.clear();
+	renderer.render (scene, camera);
+	renderer.render (sceneHUD, cameraHUD);
+}
+
+</script>
+</body>
+</html>

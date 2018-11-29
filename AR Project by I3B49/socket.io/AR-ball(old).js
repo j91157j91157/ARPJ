@@ -12,9 +12,7 @@ var v0, v1, v2;
 
 app.get('/', function(req, res){
   res.sendFile(__dirname + '/AR-ball.html');
-});
-
-app.get('/high', function(req, res){
+	////////////
 	if(req.query.v !== undefined){
 		var vec = req.query.v;
 		v0 = vec[0];
@@ -22,49 +20,6 @@ app.get('/high', function(req, res){
 		v2 = vec[2];
 		console.log(req.query);
 		//console.log(req.query.v);
-
-		var output = {
-			v0: v0,
-			v1: v1,
-			v2: v2
-		};
-
-		res.writeHead(200, {
-		  	"Content-Type": "application/json",
-      	"Access-Control-Allow-Origin": "*",
-      	"Access-Control-Allow-Headers": "Content-Type"
-	  });
-		//console.log(JSON.stringify(output));
-
-	  res.write( JSON.stringify(output) );
-    res.end();
-	};
-});
-
-app.get('/low', function(req, res){
-	if(req.query.v !== undefined){
-		var vec = req.query.v;
-		v0 = vec[0];
-		v1 = vec[1];
-		v2 = vec[2];
-		console.log(req.query);
-		//console.log(req.query.v);
-
-		var output = {
-			v0: v0,
-			v1: v1,
-			v2: v2
-		};
-
-		res.writeHead(200, {
-		  	"Content-Type": "application/json",
-      	"Access-Control-Allow-Origin": "*",
-      	"Access-Control-Allow-Headers": "Content-Type"
-	  });
-		//console.log(JSON.stringify(output));
-
-	  res.write( JSON.stringify(output) );
-    res.end();
 	};
 });
 
@@ -89,7 +44,7 @@ io.on('connect', function(socket){
   // inform the status of all other clients ...
   // new kid needs to learn about old fellows
 
-  status.push ({id: nID, turn: false});
+  status.push ({id: nID, turn: false, v0: v0, v1: v1, v2: v2});
   console.log (status);
   io.emit ('update_status', status)
 
@@ -106,7 +61,13 @@ io.on('connect', function(socket){
   	}
  	status[i].turn = !status[i].turn;
 
- 	console.log (status);
-  io.emit ('update_status', status);
+	//向量傳送
+	status[i].v0 = v0;
+	status[i].v1 = v1;
+	status[i].v2 = v2
+	//socket.emit ('vectorX', v0, v1, v2);
+
+ 	console.log (status)
+  	io.emit ('update_status', status);
   });
 });
