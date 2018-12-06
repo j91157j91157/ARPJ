@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<title>Socket.IO chat</title>
+</head>
+<style>
+.center {
+  text-align:center;
+}
+</style>
+
+<body>
+<h2 class='center'>
+Input a 3-Vector
+</h2>
+<hr>
+<div class='center'>
+v[0]: <input id='v0' style='width:80px'> <br><br>
+v[1]: <input id='v1' style='width:80px'> <br><br>
+v[2]: <input id='v2' style='width:80px'> <br><br>
+<button id='send'>Send</button>
+<p id="hud"></p>
+</div>
+
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+
+<script>
+var socket; // my socket with server
+var myID;   // server know me as 'myID'
+
+$('#send').click ( function() {
+
+	var x0 = $('#v0').val() || 0;
+	var x1 = $('#v1').val() || 0;
+	var x2 = $('#v2').val() || 0;
+
+  	var param = { me: myID, v:[x0, x1, x2] };
+	   vecStr = JSON.stringify (param)
+  	console.log (vecStr);
+
+  	socket.emit ('vel', vecStr)  // send vecStr to server
+
+
+});
+
+
+$(function () {
+
+	socket = io();  // set up global var 'socket' (my connection with server)
+
+	// the handlers for all messages coming from server
+
+	// server 回傳 myID
+	socket.on ('id_set', function(msg) {
+		console.log ('i am ' + msg);
+		// console.log (typeof (msg)) // Number
+		myID = msg;
+
+		//otherID = (myID + 1)%2
+		// id = 0, myID = 0
+		// id = 1, myID = 1, otherID = 0
+		// quick fix...
+		if (myID === 1) {
+			otherID = 0
+		}
+		if (myID === 0) {
+			$('#hud').text ('I am client 0')
+		} else {
+			$('#hud').text ('I am client 1')
+		}
+
+	});
+
+	// server告知其他client的vel ...
+	socket.on ('velOther', function (msg) {
+		console.log ('velOther: ' + msg)
+
+		// 解開，讀取內容，
+		// 算出速率，以證實訊息可以讀取並運作
+		var vv = JSON.parse (msg)
+		console.log (vv)
+		var speed = Math.sqrt( vv.v[0]*vv.v[0] + vv.v[1]*vv.v[1] + vv.v[2]*vv.v[2] )
+		$('#hud').text ('speed of the other: ' + speed.toFixed(2) )
+	})
+
+	// server告知有 new_id登入
+	socket.on ('new_id', function(msg) {
+		console.log ('new kid in town: ' + msg);
+		otherID = msg;
+	})
+
+});
+
+</script>
+</body>
+</html>

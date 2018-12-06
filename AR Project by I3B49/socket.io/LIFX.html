@@ -8,6 +8,9 @@
 <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
 <!-- ar.js -->
 <script src="https://cdn.rawgit.com/j91157j91157/ARPJ/master/three.js/build/ar.js"></script>
+<!-- ar.js -->
+<script src="https://jyunming-chen.github.io/webspeech/platform/platform.js"></script>
+<script src="https://jyunming-chen.github.io/webspeech/webspeech/src/webspeech.js"></script>
 <!-- GLSL -->
 <script id="myVertexShader" type="x-shader/x-vertex">
   varying vec3 objpos;
@@ -44,6 +47,7 @@ void main() {
 
 <body style='margin : 0px; overflow: hidden; font-family: Monospace;'>
 <div style='font-size:2em;position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+  <p id='spoken'></p>
 <!--<button id="lightOn" style="width:40%">Light On</button>-->
 </div>
 
@@ -64,6 +68,7 @@ var markerHiro;
 var arToolKitSource, arToolKitContext;
 var ring, bulb, power;
 var toggle = false;
+var listener = new AudioListener();
 
 init();
 animate();
@@ -226,13 +231,13 @@ function onTouchStart (event) {
 
     if (radius < 0.9) {
       if(toggle){
-        $.get( "http://127.0.0.1:3000/turnoff", function (res) {
+        $.get( "https://73861129.ngrok.io/turnoff", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
       }
       else {
-        $.get( "http://127.0.0.1:3000/turnon", function (res) {
+        $.get( "https://73861129.ngrok.io/turnon", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
@@ -259,7 +264,7 @@ function onTouchStart (event) {
 
     console.log(outputStr);
 
-    $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){
+    $.get("https://73861129.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
       console.log (data)
     });
 	}
@@ -319,7 +324,7 @@ function onMouseDown (event) {
 
   console.log(outputStr);
 
-  $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){
+  $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
     console.log (data)
   });
 }
@@ -333,6 +338,18 @@ function animate() {
   ring.material.visible = markerRoot.visible;
   power.material.visible = markerRoot.visible;
   picker.material.visible = markerRoot.visible;
+
+  listener.listen("zh", function(text) {
+    if(text === "關閉" || text === "關掉") $.get("http://127.0.0.1:3000/turnoff", function(data){});
+    if(text === "開啟" || text === "打開") $.get("http://127.0.0.1:3000/turnon", function(data){});
+    if(text === "紅色") $.get("http://127.0.0.1:3000/red", function(data){});
+    if(text === "綠色") $.get("http://127.0.0.1:3000/green", function(data){});
+    if(text === "藍色") $.get("http://127.0.0.1:3000/blue", function(data){});
+    if(text === "白色") $.get("http://127.0.0.1:3000/white", function(data){});
+
+  	var spoken = 'you said: ' + text
+    console.log ( spoken ); //document.getElementById("text").value = text;
+  });
 
   renderer.clear();
 	renderer.render (scene, camera);

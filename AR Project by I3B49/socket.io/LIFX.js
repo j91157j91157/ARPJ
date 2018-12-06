@@ -48,7 +48,7 @@ app.get ('/turnOn', function (req, res) {
 		res.end();
 });
 
-/*app.get ('/red', function (req, res) {
+app.get ('/red', function (req, res) {
 		var outputStr;
 
 		client.lights().forEach(function(light) {
@@ -68,7 +68,73 @@ app.get ('/turnOn', function (req, res) {
 		});
 		res.write(JSON.stringify(outputStr));
 		res.end();
-});*/
+});
+
+app.get ('/green', function (req, res) {
+		var outputStr;
+
+		client.lights().forEach(function(light) {
+		  light.color(120, 100, 100, 3500, 0, function(err) {
+		    if (err) {
+		      outputStr = 'Turning light ' + light.id + ' green failed';
+		    }
+		   });
+		   outputStr = 'Turned light ' + light.id + ' green';
+		});
+		console.log (outputStr)
+
+		res.writeHead(200, {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Headers": "Content-Type"
+		});
+		res.write(JSON.stringify(outputStr));
+		res.end();
+});
+
+app.get ('/blue', function (req, res) {
+		var outputStr;
+
+		client.lights().forEach(function(light) {
+		  light.color(240, 100, 100, 3500, 0, function(err) {
+		    if (err) {
+		      outputStr = 'Turning light ' + light.id + ' blue failed';
+		    }
+		   });
+		   outputStr = 'Turned light ' + light.id + ' blue';
+		});
+		console.log (outputStr)
+
+		res.writeHead(200, {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Headers": "Content-Type"
+		});
+		res.write(JSON.stringify(outputStr));
+		res.end();
+});
+
+app.get ('/white', function (req, res) {
+		var outputStr;
+
+		client.lights().forEach(function(light) {
+		  light.colorRgb(255, 255, 255, 0, function(err) {
+		    if (err) {
+		      outputStr = 'Turning light ' + light.id + ' white failed';
+		    }
+		   });
+		   outputStr = 'Turned light ' + light.id + ' white';
+		});
+		console.log (outputStr)
+
+		res.writeHead(200, {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Headers": "Content-Type"
+		});
+		res.write(JSON.stringify(outputStr));
+		res.end();
+});
 
 app.get ('/hud', function (req, res) {
 
