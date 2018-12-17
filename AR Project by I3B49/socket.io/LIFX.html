@@ -34,7 +34,7 @@ void main() {
   theta = theta < 0.0 ? theta + 6.2832 : theta;
 	float hue = theta/6.2832;
   float radius = sqrt (objpos.x*objpos.x + objpos.y*objpos.y);
-  float sat = (radius - 1.)/1.;
+  float sat = (radius - 2.)/2.;
   vec3 hsv = vec3 (hue, sat, 1.0);
   vec3 rgb = hsv2rgb (hsv);
   gl_FragColor = vec4(rgb, 1.0);
@@ -68,7 +68,7 @@ var markerHiro;
 var arToolKitSource, arToolKitContext;
 var ring, bulb, power;
 var toggle = false;
-var listener = new AudioListener();
+//var listener = new AudioListener();
 
 init();
 animate();
@@ -78,8 +78,8 @@ function init() {
 	console.log ('iOS: ' + _iOSDevice)
 
 	// init renderer
-	renderer	= new THREE.WebGLRenderer({
-		antialias	: true,
+	renderer = new THREE.WebGLRenderer({
+		antialias: true,
 		alpha: true
 	});
 	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
@@ -111,11 +111,11 @@ function init() {
     fragmentShader: document.getElementById('myFragmentShader').textContent
   });
 
-	ring = new THREE.Mesh (new THREE.RingGeometry(1,2,32), meshMaterial) //半徑比原來再除以 10
+	ring = new THREE.Mesh (new THREE.RingGeometry(2,4,32), meshMaterial) //半徑比原來再除以 10 乘 2
   sceneHUD.add (ring)
   //ring.position.y = -0.3
 
-  picker = new THREE.Mesh (new THREE.RingGeometry(0.08,0.15, 20), new THREE.MeshBasicMaterial());
+  picker = new THREE.Mesh (new THREE.RingGeometry(0.16,0.3, 20), new THREE.MeshBasicMaterial());
   picker.position.set (0, -0.15, 0);
   sceneHUD.add (picker);
 
@@ -127,7 +127,7 @@ function init() {
     side: THREE.FrontSide,
     transparent: true
   });
-  var powerGeo = new THREE.CircleGeometry( 0.9, 32 );
+  var powerGeo = new THREE.CircleGeometry( 1.8, 32 );
 
   power = new THREE.Mesh( powerGeo, powerMat );
   sceneHUD.add (power);
@@ -182,7 +182,7 @@ function init() {
 	scene.add(markerRoot)
 	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
 		type : 'pattern',
-		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/patt.hiro'
+		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/LIFX.patt'
 	})
 
 	//light
@@ -215,7 +215,7 @@ function onTouchStart (event) {
     let touchX = (event.touches[0].pageX / window.innerWidth) * 2 - 1;
 		let touchY = -(event.touches[0].pageY / window.innerHeight) * 2 + 1;
   	touchX *= 10; //7.5
-    touchY *= 6.5; //不能10 需要問老師求解。
+    touchY *= 7.5; //不能10 需要問老師求解。
     picker.position.set (touchX, touchY, 0);
 
     let tmp = Math.atan2 (touchY-(/*-3*/0), touchX-(0))
@@ -223,33 +223,33 @@ function onTouchStart (event) {
     let hue = tmp/Math.PI/2;
 
     let radius = new THREE.Vector2(touchX, touchY).distanceTo (new THREE.Vector2(0,/*-3*/0));
-    let sat = (radius-1)/1;
+    let sat = (radius-2)/2;
 
     // picker position fixed
     let angle = Math.atan2( touchY-(/*-3*/0), touchX-(0) );
     if ( angle < 0 ) angle += 2 * Math.PI;
 
-    if (radius < 0.9) {
+    if (radius < 1.8) {
       if(toggle){
-        $.get( "https://73861129.ngrok.io/turnoff", function (res) {
+        $.get( "https://b0e05fbf.ngrok.io/turnoff", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
       }
       else {
-        $.get( "https://73861129.ngrok.io/turnon", function (res) {
+        $.get( "https://b0e05fbf.ngrok.io/turnon", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
       }
     }
 
-    if (radius < 1) {
-    	picker.position.set (1*Math.cos(angle), 1*Math.sin(angle)/*-30*/, 0);
+    if (radius < 2) {
+    	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
       hue = angle/Math.PI/2;
     }
-    else if (radius > 2) {
-    	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
+    else if (radius > 4) {
+    	picker.position.set (4*Math.cos(angle), 4*Math.sin(angle)/*-30*/, 0);
     	hue = angle/Math.PI/2;
     }
 
@@ -264,7 +264,7 @@ function onTouchStart (event) {
 
     console.log(outputStr);
 
-    $.get("https://73861129.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
+    $.get("https://b0e05fbf.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
       console.log (data)
     });
 	}
@@ -283,33 +283,33 @@ function onMouseDown (event) {
   let hue = tmp/Math.PI/2;
 
   let radius = new THREE.Vector2(mouseX, mouseY).distanceTo (new THREE.Vector2(0,/*-3*/0));
-  let sat = (radius-1)/1;
+  let sat = (radius-2)/2;
 
   // picker position fixed
   let angle = Math.atan2( mouseY-(/*-3*/0), mouseX-(0) );
   if ( angle < 0 ) angle += 2 * Math.PI;
 
-  if (radius < 0.9) {
+  if (radius < 1.8) {
     if(toggle){
-      $.get( "http://127.0.0.1:3000/turnoff", function (res) {
+      $.get( "https://b0e05fbf.ngrok.io/turnoff", function (res) {
     		console.log (res)
     	});
       toggle = !toggle;
     }
     else {
-      $.get( "http://127.0.0.1:3000/turnon", function (res) {
+      $.get( "https://b0e05fbf.ngrok.io/turnon", function (res) {
     		console.log (res)
     	});
       toggle = !toggle;
     }
   }
 
-  if (radius < 1) {
-  	picker.position.set (1*Math.cos(angle), 1*Math.sin(angle)/*-30*/, 0);
+  if (radius < 2) {
+  	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
     hue = angle/Math.PI/2;
   }
-  else if (radius > 2) {
-  	picker.position.set (2*Math.cos(angle), 2*Math.sin(angle)/*-30*/, 0);
+  else if (radius > 4) {
+  	picker.position.set (4*Math.cos(angle), 4*Math.sin(angle)/*-30*/, 0);
   	hue = angle/Math.PI/2;
   }
 
@@ -324,7 +324,7 @@ function onMouseDown (event) {
 
   console.log(outputStr);
 
-  $.get("http://127.0.0.1:3000/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
+  $.get("https://b0e05fbf.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
     console.log (data)
   });
 }
@@ -335,11 +335,11 @@ function animate() {
 	if( arToolkitSource.ready === false )	return
 	arToolkitContext.update( arToolkitSource.domElement );
 
-  ring.material.visible = markerRoot.visible;
-  power.material.visible = markerRoot.visible;
-  picker.material.visible = markerRoot.visible;
+  //ring.material.visible = markerRoot.visible;
+  //power.material.visible = markerRoot.visible;
+  //picker.material.visible = markerRoot.visible;
 
-  listener.listen("zh", function(text) {
+  /*listener.listen("zh", function(text) {
     if(text === "關閉" || text === "關掉") $.get("http://127.0.0.1:3000/turnoff", function(data){});
     if(text === "開啟" || text === "打開") $.get("http://127.0.0.1:3000/turnon", function(data){});
     if(text === "紅色") $.get("http://127.0.0.1:3000/red", function(data){});
@@ -349,7 +349,7 @@ function animate() {
 
   	var spoken = 'you said: ' + text
     console.log ( spoken ); //document.getElementById("text").value = text;
-  });
+  });*/
 
   renderer.clear();
 	renderer.render (scene, camera);

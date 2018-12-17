@@ -85,6 +85,8 @@ $('#high').click ( function() {
   console.log (vecStr);
 
   socket.emit ('vel', vecStr)  // send vecStr to server
+  v1 = 0.6;
+  if(balls[myID].isStopped) balls[myID].rebirth();
 });
 
 $('#low').click ( function() {
@@ -93,6 +95,8 @@ $('#low').click ( function() {
   console.log (vecStr);
 
   socket.emit ('vel', vecStr)  // send vecStr to server
+  v1 = 0.2;
+  if(balls[myID].isStopped) balls[myID].rebirth();
 });
 
 $(function () {
