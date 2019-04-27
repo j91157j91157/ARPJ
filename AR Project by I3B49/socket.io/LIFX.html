@@ -182,7 +182,7 @@ function init() {
 	scene.add(markerRoot)
 	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
 		type : 'pattern',
-		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/LIFX.patt'
+		patternUrl : 'https://raw.githubusercontent.com/j91157j91157/ARPJ/master/data/data/LIFX.patt' //patt.hiro
 	})
 
 	//light
@@ -196,7 +196,7 @@ function init() {
 	var gridXZ = new THREE.GridHelper(100, 10, 'red', 'white');
   //markerRoot.add(gridXZ);
 
-  var geometry = new THREE.SphereGeometry(0.2, 0.3, 36);//new THREE.BoxGeometry(1, 1, 1);
+  var geometry = new THREE.SphereGeometry(0.2, 0.3, 64);//new THREE.BoxGeometry(1, 1, 1);
   bulb = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({color:'white'}));
   markerRoot.add(bulb);
   bulb.position.y = 0.2;//0.5
@@ -231,13 +231,13 @@ function onTouchStart (event) {
 
     if (radius < 1.8) {
       if(toggle){
-        $.get( "https://b0e05fbf.ngrok.io/turnoff", function (res) {
+        $.get( "https://732ed064.ngrok.io/turnoff", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
       }
       else {
-        $.get( "https://b0e05fbf.ngrok.io/turnon", function (res) {
+        $.get( "https://732ed064.ngrok.io/turnon", function (res) {
       		console.log (res)
       	});
         toggle = !toggle;
@@ -264,7 +264,7 @@ function onTouchStart (event) {
 
     console.log(outputStr);
 
-    $.get("https://b0e05fbf.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
+    $.get("https://732ed064.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
       console.log (data)
     });
 	}
@@ -291,13 +291,13 @@ function onMouseDown (event) {
 
   if (radius < 1.8) {
     if(toggle){
-      $.get( "https://b0e05fbf.ngrok.io/turnoff", function (res) {
+      $.get( "https://732ed064.ngrok.io/turnoff", function (res) {
     		console.log (res)
     	});
       toggle = !toggle;
     }
     else {
-      $.get( "https://b0e05fbf.ngrok.io/turnon", function (res) {
+      $.get( "https://732ed064.ngrok.io/turnon", function (res) {
     		console.log (res)
     	});
       toggle = !toggle;
@@ -324,7 +324,7 @@ function onMouseDown (event) {
 
   console.log(outputStr);
 
-  $.get("https://b0e05fbf.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
+  $.get("https://732ed064.ngrok.io/hud?" + outputStr, function(data){ //手機裝置需要用 ngrok 的網址
     console.log (data)
   });
 }
@@ -335,9 +335,9 @@ function animate() {
 	if( arToolkitSource.ready === false )	return
 	arToolkitContext.update( arToolkitSource.domElement );
 
-  //ring.material.visible = markerRoot.visible;
-  //power.material.visible = markerRoot.visible;
-  //picker.material.visible = markerRoot.visible;
+  ring.material.visible = markerRoot.visible;
+  power.material.visible = markerRoot.visible;
+  picker.material.visible = markerRoot.visible;
 
   /*listener.listen("zh", function(text) {
     if(text === "關閉" || text === "關掉") $.get("http://127.0.0.1:3000/turnoff", function(data){});
